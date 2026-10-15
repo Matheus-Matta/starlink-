@@ -71,6 +71,7 @@ const clientFields = {
   email: emailSchema,
   contactName: optionalText(120),
   notes: optionalText(2000),
+  address: optionalText(500),
 };
 
 export const clientCreateSchema = z.object(clientFields);
