@@ -1,0 +1,33 @@
+# dependências
+/node_modules
+
+# testes
+/coverage
+
+# next.js
+/.next/
+/out/
+/build
+next-env.d.ts
+*.tsbuildinfo
+
+# variáveis de ambiente (segredos nunca são versionados)
+.env*
+!.env.example
+
+# chaves e certificados
+*.pem
+
+# logs
+npm-debug.log*
+
+# sistema operacional
+.DS_Store
+Thumbs.db
+
+# Dados persistidos: nunca versionar (preserva apenas o diretório)
+/storage/*
+!/storage/.gitkeep
+
+# Backups (criptografados, mas não pertencem ao repositório)
+/backups/

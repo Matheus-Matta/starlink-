@@ -1,0 +1,49 @@
+# Produção em VPS: app Next.js (instância única) + Caddy (HTTPS automático via Let's Encrypt).
+#   1. cp .env.example .env  e preencha (ou: npm run admin:bootstrap -- --env .env)
+#   2. defina DOMAIN e PUBLIC_BASE_URL=https://<DOMAIN> no .env
+#   3. docker compose up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      # O Caddy é o único cliente da app; X-Forwarded-For dele é confiável.
+      TRUST_PROXY: "true"
+    volumes:
+      - starlink-storage:/app/storage
+      - starlink-backups:/app/backups
+    expose:
+      - "3000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # Uma única réplica: sessões, índice e contadores ficam na memória do processo.
+    deploy:
+      replicas: 1
+    stop_grace_period: 20s
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?Defina DOMAIN no .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  starlink-storage:
+  starlink-backups:
+  caddy-data:
+  caddy-config:
