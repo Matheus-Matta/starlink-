@@ -17,6 +17,7 @@ export type Client = {
   anonymized: boolean;
   createdAt: string;
   updatedAt: string;
+  address: string | null;
 };
 
 export type PlateType = "QR" | "NFC" | "QR_NFC";

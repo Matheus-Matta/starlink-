@@ -11,7 +11,7 @@ import { formatDocument } from "@/lib/document";
 import { useApi } from "@/hooks/use-api";
 import type { Client } from "@/types/domain";
 
-type Values = { name: string; tradeName: string; document: string; phone: string; email: string; contactName: string; notes: string };
+type Values = { name: string; tradeName: string; document: string; phone: string; email: string; contactName: string; notes: string; address: string};
 
 const toValues = (c?: Client): Values => ({
   name: c?.name ?? "",
@@ -21,6 +21,7 @@ const toValues = (c?: Client): Values => ({
   email: c?.email ?? "",
   contactName: c?.contactName ?? "",
   notes: c?.notes ?? "",
+  address: c?.address ?? "",
 });
 
 export function ClientForm({ client }: { client?: Client }) {
@@ -77,6 +78,15 @@ export function ClientForm({ client }: { client?: Client }) {
           <Input id="contactName" value={values.contactName} onChange={set("contactName")} maxLength={120} {...aria("contactName")} />
         </FormField>
       </div>
+      <FormField id="address" label="Endereço" error={err("address")}>
+        <Textarea
+          id="address"
+          value={values.address}
+          onChange={set("address")}
+          maxLength={500}
+          rows={2}
+          {...aria("address")}/>
+      </FormField>
       <FormField id="notes" label="Observações" error={err("notes")} hint="Evite registrar dados pessoais desnecessários.">
         <Textarea id="notes" value={values.notes} onChange={set("notes")} maxLength={2000} rows={4} {...aria("notes")} />
       </FormField>

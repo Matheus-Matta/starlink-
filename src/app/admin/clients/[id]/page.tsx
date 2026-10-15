@@ -94,7 +94,7 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
               <DetailRow label="E-mail">{client.email}</DetailRow>
               <DetailRow label="Telefone">{client.phone}</DetailRow>
               <DetailRow label="Responsável">{client.contactName}</DetailRow>
-            </dl>
+              <DetailRow label="Endereço">{client.address}</DetailRow></dl>
           </Section>
         ) : (
           <Section
