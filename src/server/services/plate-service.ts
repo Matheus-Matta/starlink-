@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { describeTarget } from "@/lib/targets";
 import { compareText, matchesQuery } from "@/lib/text";
 import { zonedLocalToUtc } from "@/lib/timezone";
-import type { PlateCreateInput, PlateUpdateInput, RoutingUpdateInput, ScheduleCreateInput } from "@/lib/validation";
+import type { ClientRoutingUpdateInput, PlateCreateInput, PlateUpdateInput, RoutingUpdateInput, ScheduleCreateInput } from "@/lib/validation";
 import type { HistoryEntry, Plate, PlateRouting, RecordStatus, Schedule, Target } from "@/types/domain";
 import type { Mutex } from "@/server/concurrency";
 import { AppError, notFound, staleVersion } from "@/server/errors";
@@ -98,9 +98,15 @@ export class PlateService {
   }
 
   /** Aplica uma alteração com verificação de versão, histórico e limpeza de agendamentos antigos. */
-  private mutate(id: string, version: number, change: (plate: Plate, at: string) => { plate: Plate; history: HistoryEntry[] }) {
+  private mutate(
+    id: string,
+    version: number,
+    change: (plate: Plate, at: string) => { plate: Plate; history: HistoryEntry[] },
+    authorize?: (plate: Plate) => void,
+  ) {
     return this.mutex.run(async () => {
       const current = this.get(id);
+      authorize?.(current);
       if (current.version !== version) throw staleVersion();
       const at = this.now().toISOString();
       const { plate, history } = change(current, at);
@@ -172,6 +178,24 @@ export class PlateService {
       track("target", describeTarget(current.routing.target), describeTarget(routing.target));
       track("page", summarizePage(current.routing.page), summarizePage(routing.page));
       return { plate: { ...current, routing }, history };
+    });
+  }
+
+  /** Edição reduzida do portal, com autorização por objeto dentro da mesma seção crítica da gravação. */
+  updateClientRouting(clientId: string, id: string, input: ClientRoutingUpdateInput): Promise<Plate> {
+    return this.mutate(id, input.version, (current, at) => {
+      if (current.status === "archived") throw new AppError("CONFLICT", "Esta placa está arquivada.");
+      const target: Target = input.destinationUrl ? { kind: "url", url: input.destinationUrl } : { kind: "none" };
+      const history: HistoryEntry[] = [];
+      if (current.routing.active !== input.active) {
+        history.push({ at, action: "client-link-changed", field: "active", before: current.routing.active ? "ativo" : "inativo", after: input.active ? "ativo" : "inativo" });
+      }
+      if (describeTarget(current.routing.target) !== describeTarget(target)) {
+        history.push({ at, action: "client-link-changed", field: "target", before: describeTarget(current.routing.target), after: describeTarget(target) });
+      }
+      return { plate: { ...current, routing: { ...current.routing, active: input.active, target } }, history };
+    }, (current) => {
+      if (current.clientId !== clientId) throw new AppError("NOT_FOUND", "Placa não encontrada.");
     });
   }
 

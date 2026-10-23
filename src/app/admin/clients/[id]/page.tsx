@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArchiveIcon, ArchiveRestoreIcon, PlusIcon, UserXIcon } from "lucide-react";
 
 import { ClientForm } from "@/components/admin/client-form";
+import { ClientAccessForm } from "@/components/admin/client-access-form";
 import { ConfirmAction } from "@/components/admin/confirm-action";
 import { CopyButton } from "@/components/admin/copy-button";
 import { DetailRow, EmptyState, PageHeader, Section, StatusBadge } from "@/components/admin/ui-bits";
@@ -24,6 +25,7 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
   const plates = app.plates.list({ clientId: client.id, includeArchived: true });
   const tz = app.config.timeZone;
   const archived = client.status === "archived";
+  const access = app.credentials.status(client.id);
 
   return (
     <>
@@ -107,6 +109,15 @@ export default async function ClientPage({ params }: PageProps<"/admin/clients/[
             }
           >
             <ClientForm key={client.version} client={client} />
+          </Section>
+        )}
+
+        {!client.anonymized && (
+          <Section
+            title="Acesso do cliente"
+            description="O cliente vê relatórios e altera somente os links das placas vinculadas a ele."
+          >
+            <ClientAccessForm clientId={client.id} email={client.email} initial={access} disabled={archived} />
           </Section>
         )}
 

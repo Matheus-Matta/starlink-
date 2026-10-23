@@ -34,6 +34,7 @@ export const destinationUrlSchema = z.string().transform((value, ctx) => {
 // ---------- Autenticação ----------
 
 export const loginSchema = z.object({
+  identifier: z.string().trim().max(254).optional().default("admin"),
   password: z.string().min(1, "Informe a senha.").max(256),
 });
 
@@ -79,6 +80,11 @@ export const clientUpdateSchema = z.object(clientFields).extend({ version: versi
 
 export type ClientCreateInput = z.infer<typeof clientCreateSchema>;
 export type ClientUpdateInput = z.infer<typeof clientUpdateSchema>;
+
+export const clientAccessSchema = z.object({
+  enabled: z.boolean(),
+  password: z.string().min(12, "Use pelo menos 12 caracteres.").max(256).optional(),
+});
 
 // ---------- Placas ----------
 
@@ -139,6 +145,14 @@ export const routingUpdateSchema = z.object({
 });
 
 export type RoutingUpdateInput = z.infer<typeof routingUpdateSchema>;
+
+export const clientRoutingUpdateSchema = z.object({
+  version: versionSchema,
+  active: z.boolean(),
+  destinationUrl: destinationUrlSchema.nullish().transform((value) => value ?? null),
+});
+
+export type ClientRoutingUpdateInput = z.infer<typeof clientRoutingUpdateSchema>;
 
 // ---------- Agendamentos ----------
 

@@ -7,17 +7,19 @@ import path from "node:path";
 import { EnvelopeError, openJson, sealJson } from "@/server/security/envelope";
 
 /** Coleções permitidas: nenhum caminho é derivado de entrada livre. */
-export type Collection = "clients" | "plates" | "stats";
+export type Collection = "clients" | "credentials" | "plates" | "stats";
 
 /** Caminhos relativos ao STORAGE_DIR, sempre com "/" (também usados em logs e backups). */
 const COLLECTION_DIRS: Record<Collection, string> = {
   clients: "data/clients",
+  credentials: "data/credentials",
   plates: "data/plates",
   stats: "stats",
 };
 
 const ID_PATTERNS: Record<Collection, RegExp> = {
   clients: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+  credentials: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   plates: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   stats: /^\d{4}-\d{2}$/,
 };
@@ -99,6 +101,11 @@ export class FileStore {
     const target = this.filePath(collection, id);
     const sealed = sealJson(this.key, value, this.context(collection, id));
     await writeFileAtomic(target, sealed);
+  }
+
+  async remove(collection: Collection, id: string): Promise<void> {
+    await fs.rm(this.filePath(collection, id), { force: true });
+    await syncDirectory(this.dir(collection));
   }
 }
 

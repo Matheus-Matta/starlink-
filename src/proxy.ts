@@ -11,7 +11,7 @@ const SESSION_COOKIES = ["starlink_session", "__Host-starlink_session"];
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSessionCookie = SESSION_COOKIES.some((name) => request.cookies.has(name));
-  if (pathname.startsWith("/admin") && !hasSessionCookie) {
+  if ((pathname.startsWith("/admin") || pathname.startsWith("/cliente")) && !hasSessionCookie) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

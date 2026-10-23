@@ -19,9 +19,9 @@ const Login = () => {
           <Logo className="gap-3" />
 
           <div>
-            <CardTitle className="mb-1.5 text-2xl">Acesso administrativo</CardTitle>
+            <CardTitle className="mb-1.5 text-2xl">Acesse sua conta</CardTitle>
             <CardDescription className="text-base">
-              Gerencie clientes, placas e links de QR Code e NFC.
+              Administradores gerenciam a operação; clientes acompanham acessos e seus próprios links.
             </CardDescription>
           </div>
         </CardHeader>

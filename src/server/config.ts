@@ -62,8 +62,15 @@ export function getConfig(): AppConfig {
     throw new Error(`Configuração inválida:\n${problems}`);
   }
   const env = parsed.data;
-  const isLocalhost = ["localhost", "127.0.0.1", "[::1]"].includes(new URL(env.PUBLIC_BASE_URL).hostname);
-  if (env.NODE_ENV === "production" && !env.PUBLIC_BASE_URL.startsWith("https://") && !isLocalhost) {
+  const publicUrl = new URL(env.PUBLIC_BASE_URL);
+  if (!["http:", "https:"].includes(publicUrl.protocol)) {
+    throw new Error("Configuração inválida:\n- PUBLIC_BASE_URL aceita somente http:// ou https://.");
+  }
+  if (publicUrl.username || publicUrl.password || publicUrl.search || publicUrl.hash || publicUrl.pathname !== "/") {
+    throw new Error("Configuração inválida:\n- PUBLIC_BASE_URL deve conter somente a origem, sem credenciais, caminho, query ou fragmento.");
+  }
+  const isLocalhost = ["localhost", "127.0.0.1", "[::1]"].includes(publicUrl.hostname);
+  if (env.NODE_ENV === "production" && publicUrl.protocol !== "https:" && !isLocalhost) {
     throw new Error("Configuração inválida:\n- PUBLIC_BASE_URL deve usar https:// em produção.");
   }
   cached = {

@@ -1,9 +1,30 @@
 {$DOMAIN} {
 	encode zstd gzip
+
+	# Impede uploads inesperadamente grandes antes de chegarem à aplicação.
+	request_body {
+		max_size 2MB
+	}
+
+	# Também cobre respostas de erro geradas pelo próprio proxy.
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Permitted-Cross-Domain-Policies "none"
+	}
+
 	# Caddy adiciona o IP real do visitante ao X-Forwarded-For (usado no rate limit).
 	reverse_proxy app:3000
 	log {
 		output stdout
-		format json
+		# Cookie e Authorization já são ocultados pelo Caddy; também reduzimos a precisão do IP nos logs.
+		format filter {
+			request>remote_ip ip_mask 24 48
+			request>client_ip ip_mask 24 48
+			wrap json
+		}
 	}
 }

@@ -67,6 +67,7 @@ export async function requireAdminApi(request: Request): Promise<Session> {
   const app = await getApp();
   const store = await cookies();
   const session = app.sessions.get(store.get(sessionCookieName(app.config))?.value);
+  if (session && session.role !== "admin") throw new AppError("FORBIDDEN", "Acesso exclusivo do administrador.");
   if (!session) throw new AppError("UNAUTHORIZED", "Sessão expirada. Entre novamente.");
   if (UNSAFE_METHODS.has(request.method)) {
     assertSameOrigin(request, app.config);
@@ -82,5 +83,36 @@ export async function requireAdminPage(): Promise<Session> {
   const store = await cookies();
   const session = app.sessions.get(store.get(sessionCookieName(app.config))?.value);
   if (!session) redirect("/login");
+  if (session.role !== "admin") redirect("/cliente");
+  return session;
+}
+
+/** Autoriza APIs do portal e obtém o cliente somente a partir da sessão. */
+export async function requireClientApi(request: Request): Promise<Session & { role: "client"; clientId: string }> {
+  const app = await getApp();
+  const store = await cookies();
+  const session = app.sessions.get(store.get(sessionCookieName(app.config))?.value);
+  if (!session) throw new AppError("UNAUTHORIZED", "Sessão expirada. Entre novamente.");
+  if (session.role !== "client") throw new AppError("FORBIDDEN", "Acesso exclusivo do cliente.");
+  const client = app.clientRepository.get(session.clientId);
+  if (!client || client.status !== "active" || client.anonymized || !app.credentials.isEnabled(client.id)) {
+    throw new AppError("UNAUTHORIZED", "Seu acesso ao portal está desativado.");
+  }
+  if (UNSAFE_METHODS.has(request.method)) {
+    assertSameOrigin(request, app.config);
+    const token = request.headers.get(CSRF_HEADER);
+    if (!token || !safeEqual(token, session.csrfToken)) throw new AppError("FORBIDDEN", "Token CSRF inválido. Recarregue a página.");
+  }
+  return session;
+}
+
+export async function requireClientPage(): Promise<Session & { role: "client"; clientId: string }> {
+  const app = await getApp();
+  const store = await cookies();
+  const session = app.sessions.get(store.get(sessionCookieName(app.config))?.value);
+  if (!session) redirect("/login");
+  if (session.role !== "client") redirect("/admin");
+  const client = app.clientRepository.get(session.clientId);
+  if (!client || client.status !== "active" || client.anonymized || !app.credentials.isEnabled(client.id)) redirect("/login");
   return session;
 }

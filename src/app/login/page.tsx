@@ -14,6 +14,7 @@ export const metadata: Metadata = {
 export default async function LoginPage() {
   const app = await getApp();
   const token = (await cookies()).get(sessionCookieName(app.config))?.value;
-  if (app.sessions.get(token)) redirect("/admin");
+  const session = app.sessions.get(token);
+  if (session) redirect(session.role === "admin" ? "/admin" : "/cliente");
   return <Login />;
 }

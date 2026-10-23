@@ -9,7 +9,9 @@ import type { Client, RecordStatus } from "@/types/domain";
 import type { Mutex } from "@/server/concurrency";
 import { AppError, notFound, staleVersion } from "@/server/errors";
 import type { ClientRepository } from "@/server/repositories/client-repository";
+import type { CredentialRepository } from "@/server/repositories/credential-repository";
 import type { PlateRepository } from "@/server/repositories/plate-repository";
+import type { SessionStore } from "@/server/security/sessions";
 
 export type ClientListFilters = { q?: string; includeArchived?: boolean };
 
@@ -19,6 +21,8 @@ export class ClientService {
   constructor(
     private readonly clients: ClientRepository,
     private readonly plates: PlateRepository,
+    private readonly credentials: CredentialRepository,
+    private readonly sessions: SessionStore,
     private readonly mutex: Mutex,
     private readonly now: () => Date = () => new Date(),
   ) {}
@@ -54,9 +58,16 @@ export class ClientService {
     if (duplicate) throw new AppError("VALIDATION", "Já existe um cliente com este CPF/CNPJ.", { document: "CPF/CNPJ já cadastrado." });
   }
 
+  private assertUniqueEmail(email: string | null, exceptId?: string): void {
+    if (!email) return;
+    const duplicate = this.clients.list().find((c) => c.email === email && c.id !== exceptId);
+    if (duplicate) throw new AppError("VALIDATION", "Já existe um cliente com este e-mail.", { email: "E-mail já cadastrado." });
+  }
+
   create(input: ClientCreateInput): Promise<Client> {
     return this.mutex.run(async () => {
       this.assertUniqueDocument(input.document);
+      this.assertUniqueEmail(input.email);
       const at = this.now().toISOString();
       const client: Client = {
         id: randomUUID(),
@@ -79,6 +90,7 @@ export class ClientService {
       if (current.version !== version) throw staleVersion();
       if (current.anonymized) throw new AppError("CONFLICT", "Clientes anonimizados não podem ser editados.");
       this.assertUniqueDocument(fields.document, id);
+      this.assertUniqueEmail(fields.email, id);
       const next: Client = { ...current, ...fields, version: current.version + 1, updatedAt: this.now().toISOString() };
       await this.clients.save(next);
       return next;
@@ -93,6 +105,7 @@ export class ClientService {
       if (status === "active" && current.anonymized) throw new AppError("CONFLICT", "Clientes anonimizados não podem ser reativados.");
       const next: Client = { ...current, status, version: current.version + 1, updatedAt: this.now().toISOString() };
       await this.clients.save(next);
+      if (status === "archived") this.sessions.destroyClient(id);
       return next;
     });
   }
@@ -120,6 +133,8 @@ export class ClientService {
         version: current.version + 1,
         updatedAt: this.now().toISOString(),
       };
+      await this.credentials.remove(id);
+      this.sessions.destroyClient(id);
       await this.clients.save(next);
       return next;
     });

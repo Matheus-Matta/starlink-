@@ -4,7 +4,7 @@ import path from "node:path";
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 /** Únicos caminhos de dados aceitos (relativos ao STORAGE_DIR). Bloqueia path traversal. */
-export const RECORD_PATH_RE = new RegExp(`^(data/(clients|plates)/${UUID}|stats/\\d{4}-\\d{2})\\.enc$`);
+export const RECORD_PATH_RE = new RegExp(`^(data/(clients|credentials|plates)/${UUID}|stats/\\d{4}-\\d{2})\\.enc$`);
 
 export function fail(message: string): never {
   console.error(`✖ ${message}`);
@@ -32,7 +32,7 @@ export function contextFor(relativePath: string): string {
 /** Lista os arquivos de registro (caminhos relativos com "/"). */
 export async function listRecordFiles(root: string): Promise<string[]> {
   const result: string[] = [];
-  for (const dir of ["data/clients", "data/plates", "stats"]) {
+  for (const dir of ["data/clients", "data/credentials", "data/plates", "stats"]) {
     let names: string[];
     try {
       names = await fs.readdir(path.join(root, dir));

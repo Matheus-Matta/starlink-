@@ -2,12 +2,15 @@ import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-export type Session = {
+type SessionBase = {
   csrfToken: string;
   createdAt: number;
   lastSeenAt: number;
   expiresAt: number;
 };
+
+export type Session = SessionBase & ({ role: "admin" } | { role: "client"; clientId: string });
+export type SessionPrincipal = { role: "admin" } | { role: "client"; clientId: string };
 
 export const SESSION_COOKIE_DEV = "starlink_session";
 /** Prefixo __Host-: exige Secure, Path=/ e proíbe Domain (não vaza para subdomínios). */
@@ -31,7 +34,7 @@ export class SessionStore {
     return createHmac("sha256", this.secret).update(token).digest("base64url");
   }
 
-  create(now: number = Date.now()): { token: string; session: Session } {
+  create(now: number = Date.now(), principal: SessionPrincipal = { role: "admin" }): { token: string; session: Session } {
     this.prune(now);
     const token = randomBytes(32).toString("base64url");
     const session: Session = {
@@ -39,6 +42,7 @@ export class SessionStore {
       createdAt: now,
       lastSeenAt: now,
       expiresAt: now + this.ttlMs,
+      ...principal,
     };
     this.sessions.set(this.keyOf(token), session);
     return { token, session };
@@ -64,6 +68,12 @@ export class SessionStore {
 
   destroyAll(): void {
     this.sessions.clear();
+  }
+
+  destroyClient(clientId: string): void {
+    for (const [key, session] of this.sessions) {
+      if (session.role === "client" && session.clientId === clientId) this.sessions.delete(key);
+    }
   }
 
   private prune(now: number): void {

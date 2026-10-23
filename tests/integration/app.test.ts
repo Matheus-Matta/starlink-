@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { clientCreateSchema, plateCreateSchema, plateUpdateSchema, routingUpdateSchema, scheduleCreateSchema } from "@/lib/validation";
+import { clientCreateSchema, clientRoutingUpdateSchema, plateCreateSchema, plateUpdateSchema, routingUpdateSchema, scheduleCreateSchema } from "@/lib/validation";
 import { createApp, type App } from "@/server/container";
 import { AppError } from "@/server/errors";
 import { resolveAccess } from "@/server/redirects/resolve";
@@ -22,6 +22,35 @@ beforeEach(async () => {
   ({ dir, cleanup } = await makeTempDir());
   config = makeConfig(dir);
   app = await createApp(config);
+});
+
+describe("portal do cliente", () => {
+  it("autentica por e-mail e invalida a sessão ao desativar o acesso", async () => {
+    const client = await app.clients.create(clientCreateSchema.parse({ name: "Cliente Portal", email: "portal@exemplo.com" }));
+    await app.credentials.configure(client.id, { enabled: true, password: "senha-cliente-forte" });
+
+    const login = await app.auth.login("PORTAL@EXEMPLO.COM", "senha-cliente-forte", "198.51.100.1");
+    expect(login.session).toMatchObject({ role: "client", clientId: client.id });
+    expect(app.sessions.get(login.token)).not.toBeNull();
+
+    await app.credentials.configure(client.id, { enabled: false });
+    expect(app.sessions.get(login.token)).toBeNull();
+  });
+
+  it("altera apenas links de placas pertencentes ao cliente autenticado", async () => {
+    const owner = await app.clients.create(clientCreateSchema.parse({ name: "Proprietário", email: "dono@exemplo.com" }));
+    const other = await app.clients.create(clientCreateSchema.parse({ name: "Outro", email: "outro@exemplo.com" }));
+    const ownPlate = await app.plates.create(plateCreateSchema.parse({ clientId: owner.id, name: "Minha placa", type: "QR" }));
+    const foreignPlate = await app.plates.create(plateCreateSchema.parse({ clientId: other.id, name: "Placa alheia", type: "QR" }));
+    const input = clientRoutingUpdateSchema.parse({ version: ownPlate.version, active: true, destinationUrl: "https://novo.exemplo.com" });
+
+    const updated = await app.plates.updateClientRouting(owner.id, ownPlate.id, input);
+    expect(updated.routing.target).toEqual({ kind: "url", url: "https://novo.exemplo.com/" });
+    await expect(
+      app.plates.updateClientRouting(owner.id, foreignPlate.id, { ...input, version: foreignPlate.version }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(app.plates.get(foreignPlate.id).routing.target).toEqual({ kind: "none" });
+  });
 });
 afterEach(async () => {
   app.stats.stop();

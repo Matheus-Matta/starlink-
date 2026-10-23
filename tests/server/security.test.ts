@@ -70,6 +70,19 @@ describe("SessionStore", () => {
     expect(store.get(undefined, 1)).toBeNull();
   });
 
+  it("separa perfis e encerra somente as sessões de um cliente", () => {
+    const store = new SessionStore("s".repeat(40), 10_000, 10_000);
+    const admin = store.create(0);
+    const clientA = store.create(0, { role: "client", clientId: "a" });
+    const clientB = store.create(0, { role: "client", clientId: "b" });
+    expect(store.get(admin.token, 1)?.role).toBe("admin");
+    expect(store.get(clientA.token, 1)).toMatchObject({ role: "client", clientId: "a" });
+    store.destroyClient("a");
+    expect(store.get(clientA.token, 2)).toBeNull();
+    expect(store.get(clientB.token, 2)).not.toBeNull();
+    expect(store.get(admin.token, 2)).not.toBeNull();
+  });
+
   it("compara tokens em tempo constante", () => {
     expect(safeEqual("abc", "abc")).toBe(true);
     expect(safeEqual("abc", "abd")).toBe(false);

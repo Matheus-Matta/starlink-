@@ -4,6 +4,7 @@ import { getConfig, type AppConfig } from "@/server/config";
 import { Mutex } from "@/server/concurrency";
 import { errorSummary, log } from "@/server/logger";
 import { ClientRepository } from "@/server/repositories/client-repository";
+import { CredentialRepository } from "@/server/repositories/credential-repository";
 import { FileStore } from "@/server/repositories/file-store";
 import { PlateRepository } from "@/server/repositories/plate-repository";
 import { StatsRepository } from "@/server/repositories/stats-repository";
@@ -11,6 +12,7 @@ import { AuthService } from "@/server/security/auth";
 import { RateLimiter } from "@/server/security/rate-limit";
 import { SessionStore } from "@/server/security/sessions";
 import { ClientService } from "@/server/services/client-service";
+import { CredentialService } from "@/server/services/credential-service";
 import { ImportService } from "@/server/services/import-service";
 import { PlateService } from "@/server/services/plate-service";
 import { StatsService } from "@/server/services/stats-service";
@@ -18,6 +20,7 @@ import { StatsService } from "@/server/services/stats-service";
 export type App = {
   config: AppConfig;
   clients: ClientService;
+  credentials: CredentialService;
   plates: PlateService;
   imports: ImportService;
   stats: StatsService;
@@ -27,6 +30,7 @@ export type App = {
   publicLimiter: RateLimiter;
   plateRepository: PlateRepository;
   clientRepository: ClientRepository;
+  credentialRepository: CredentialRepository;
   health: { startedAt: string; corruptFiles: string[] };
 };
 
@@ -36,27 +40,36 @@ export async function createApp(config: AppConfig): Promise<App> {
   await store.init();
 
   const clientRepository = new ClientRepository(store);
+  const credentialRepository = new CredentialRepository(store);
   const plateRepository = new PlateRepository(store);
   const statsRepository = new StatsRepository(store);
-  const corruptFiles = [...(await clientRepository.load()), ...(await plateRepository.load()), ...(await statsRepository.load())];
+  const corruptFiles = [
+    ...(await clientRepository.load()),
+    ...(await credentialRepository.load()),
+    ...(await plateRepository.load()),
+    ...(await statsRepository.load()),
+  ];
   for (const file of corruptFiles) log("error", "storage.corrupt_file", { file });
 
   // Uma única fila de mutações para clientes e placas (ambos se referenciam).
   const mutex = new Mutex();
   const plates = new PlateService(plateRepository, clientRepository, mutex);
   const sessions = new SessionStore(config.sessionSecret, config.sessionTtlMs, config.sessionIdleMs);
+  const credentials = new CredentialService(credentialRepository, clientRepository, sessions, mutex);
 
   return {
     config,
-    clients: new ClientService(clientRepository, plateRepository, mutex),
+    clients: new ClientService(clientRepository, plateRepository, credentialRepository, sessions, mutex),
+    credentials,
     plates,
     imports: new ImportService(clientRepository, plates),
     stats: new StatsService(statsRepository, config.timeZone, config.statsFlushMs),
-    auth: new AuthService(config, sessions),
+    auth: new AuthService(config, sessions, clientRepository, credentialRepository),
     sessions,
     publicLimiter: new RateLimiter({ limit: 120, windowMs: 60_000, blockMs: 60_000, maxBlockMs: 15 * 60_000, maxKeys: 50_000 }),
     plateRepository,
     clientRepository,
+    credentialRepository,
     health: { startedAt: new Date().toISOString(), corruptFiles },
   };
 }

@@ -20,6 +20,15 @@ export type Client = {
   address: string | null;
 };
 
+/** Credencial do portal, persistida separadamente dos dados retornados pelas APIs de clientes. */
+export type ClientCredential = {
+  clientId: string;
+  passwordHash: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PlateType = "QR" | "NFC" | "QR_NFC";
 
 /** Destino de um canal: URL externa, página de múltiplos links ou nenhum. */
