@@ -90,7 +90,7 @@ export default async function PlatesPage({ searchParams }: PageProps<"/admin/pla
                     </Link>
                     {plate.serialNumber && <p className="text-muted-foreground text-xs">Série {plate.serialNumber}</p>}
                   </TableCell>
-                  <TableCell className="hidden md:table-cell">{clientName.get(plate.clientId) ?? "—"}</TableCell>
+                  <TableCell className="hidden md:table-cell">{(plate.clientId && clientName.get(plate.clientId)) ?? "—"}</TableCell>
                   <TableCell>
                     <Badge variant="outline">{PLATE_TYPE_LABEL[plate.type]}</Badge>
                   </TableCell>

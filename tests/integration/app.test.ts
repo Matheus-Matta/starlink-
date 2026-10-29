@@ -128,7 +128,7 @@ describe("código do link (/r/<código>)", () => {
     expect(codes).toEqual(["1", "2", "3"]);
   });
 
-  it("permite trocar o código; o antigo continua apontando para a placa e fica reservado", async () => {
+  it("permite trocar o código; o antigo continua apontando para a placa até ser reutilizado", async () => {
     const { client, plate } = await seedPlate();
     const changed = await editCode(plate, "Loja-Centro");
     expect(changed.code).toBe("loja-centro");
@@ -136,17 +136,46 @@ describe("código do link (/r/<código>)", () => {
     expect(app.plateRepository.getByCode("1")?.id).toBe(plate.id);
     expect(changed.history.at(-1)).toMatchObject({ field: "code", before: "1", after: "loja-centro" });
 
-    // A próxima placa não reaproveita o "1" (reservado) e recebe o 2.
+    // A numeração automática não reaproveita o "1" e recebe o 2.
     const next = await app.plates.create(plateCreateSchema.parse({ clientId: client.id, name: "Nova", type: "NFC" }));
     expect(next.code).toBe("2");
 
-    // Ninguém pode usar código atual ou anterior de outra placa.
+    // Código atual de outra placa é bloqueado.
     await expect(editCode(next, "loja-centro")).rejects.toMatchObject({ code: "VALIDATION" });
-    await expect(editCode(next, "1")).rejects.toMatchObject({ code: "VALIDATION" });
 
     // A própria placa pode voltar ao código anterior.
     const back = await editCode(changed, "1");
     expect(back).toMatchObject({ code: "1", previousCodes: ["loja-centro"] });
+  });
+
+  it("libera o código antigo para outra placa (na criação ou na edição)", async () => {
+    const { client, plate } = await seedPlate();
+    const changed = await editCode(plate, "3");
+    expect(app.plateRepository.isCodeTaken("1")).toBe(false);
+
+    const reused = await app.plates.create(plateCreateSchema.parse({ clientId: client.id, name: "Reuso", type: "QR", code: "1" }));
+    expect(reused.code).toBe("1");
+    expect(app.plateRepository.getByCode("1")?.id).toBe(reused.id);
+    const old = app.plateRepository.get(changed.id)!;
+    expect(old.previousCodes).toEqual([]);
+    expect(old.history.at(-1)).toMatchObject({ action: "code-released", before: "1" });
+
+    // Na edição: código atual de outra placa é bloqueado; código antigo é assumido.
+    await expect(editCode(reused, "3")).rejects.toMatchObject({ code: "VALIDATION" });
+    const renamed = await editCode(old, "loja");
+    const other = await editCode(app.plateRepository.get(reused.id)!, "3");
+    expect(other.code).toBe("3");
+    expect(app.plateRepository.get(renamed.id)!.previousCodes).toEqual([]);
+
+    // Sobrevive a um restart.
+    const restarted = await createApp(config);
+    expect(restarted.plateRepository.getByCode("3")?.id).toBe(reused.id);
+  });
+
+  it("cria placa sem cliente e com código definido na criação", async () => {
+    const plate = await app.plates.create(plateCreateSchema.parse({ clientId: "", name: "Avulsa", type: "QR", code: "Promo" }));
+    expect(plate).toMatchObject({ clientId: null, code: "promo" });
+    await expect(app.plates.create(plateCreateSchema.parse({ name: "Outra", type: "QR", code: "promo" }))).rejects.toMatchObject({ code: "VALIDATION" });
   });
 
   it("pula números já usados manualmente na sequência", async () => {
@@ -280,7 +309,7 @@ describe("importação CSV", () => {
   });
 
   it("rejeita arquivos sem as colunas obrigatórias ou grandes demais", async () => {
-    expect(app.imports.preview("a,b\n1,2").fileErrors.join()).toMatch(/cliente/);
+    expect(app.imports.preview("a,b\n1,2").fileErrors.join()).toMatch(/nome/);
     expect(() => app.imports.preview("x".repeat(600 * 1024))).toThrow(/excede/);
   });
 });

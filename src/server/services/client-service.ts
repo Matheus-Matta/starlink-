@@ -30,7 +30,7 @@ export class ClientService {
   list(filters: ClientListFilters = {}): ClientSummary[] {
     const plateCounts = new Map<string, number>();
     for (const plate of this.plates.list()) {
-      if (plate.status === "active") plateCounts.set(plate.clientId, (plateCounts.get(plate.clientId) ?? 0) + 1);
+      if (plate.status === "active" && plate.clientId) plateCounts.set(plate.clientId, (plateCounts.get(plate.clientId) ?? 0) + 1);
     }
     const q = filters.q?.trim() ?? "";
     const qDigits = onlyDigits(q);

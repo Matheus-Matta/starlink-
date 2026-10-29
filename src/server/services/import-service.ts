@@ -57,7 +57,7 @@ export class ImportService {
     });
 
     const headers = parsed.meta.fields ?? [];
-    const missing = IMPORT_COLUMNS.filter((c) => c !== "numero_serie" && c !== "url_destino" && !headers.includes(c));
+    const missing = IMPORT_COLUMNS.filter((c) => c !== "cliente" && c !== "numero_serie" && c !== "url_destino" && !headers.includes(c));
     if (missing.length) fileErrors.push(`Colunas obrigatórias ausentes: ${missing.join(", ")}.`);
     if (parsed.data.length === 0) fileErrors.push("O arquivo não contém linhas de dados.");
     if (parsed.data.length > MAX_IMPORT_ROWS) fileErrors.push(`Máximo de ${MAX_IMPORT_ROWS} linhas por importação.`);
@@ -74,12 +74,13 @@ export class ImportService {
       const errors = [...(rowErrors.get(index) ?? [])];
       const clientRef = (raw.cliente ?? "").trim();
       const client = this.findClient(clientRef);
-      if (!clientRef) errors.push("Cliente não informado.");
-      else if (!client) errors.push("Cliente não encontrado (use o ID ou o CPF/CNPJ).");
+      if (!clientRef) {
+        // Cliente é opcional.
+      } else if (!client) errors.push("Cliente não encontrado (use o ID ou o CPF/CNPJ).");
       else if (client.status !== "active") errors.push("Cliente arquivado.");
 
       const candidate = {
-        clientId: client?.id ?? "",
+        clientId: client?.id ?? null,
         name: raw.nome ?? "",
         serialNumber: raw.numero_serie ?? null,
         type: (raw.tipo ?? "").trim().toUpperCase().replace("+", "_"),

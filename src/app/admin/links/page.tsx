@@ -55,7 +55,7 @@ export default async function LinksPage({ searchParams }: PageProps<"/admin/link
                       <Link href={`/admin/plates/${plate.id}`} className="font-medium hover:underline">
                         {plate.name}
                       </Link>
-                      <p className="text-muted-foreground text-xs">{clientName.get(plate.clientId)}</p>
+                      <p className="text-muted-foreground text-xs">{plate.clientId ? clientName.get(plate.clientId) : "Sem cliente"}</p>
                     </TableCell>
                     <TableCell className="max-w-md text-sm break-all">
                       {resolution.outcome === "unavailable" ? (

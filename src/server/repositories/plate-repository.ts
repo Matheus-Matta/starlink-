@@ -64,9 +64,12 @@ export class PlateRepository {
     return this.byCode.get(code);
   }
 
-  /** Códigos atuais e anteriores (inclusive de placas arquivadas) nunca são reaproveitados. */
+  /**
+   * Código atual de alguma placa (inclusive arquivada). Códigos anteriores não contam:
+   * ficam livres para outra placa, que passa a recebê-los.
+   */
   isCodeTaken(code: string): boolean {
-    return this.byCode.has(code);
+    return this.byCode.get(code)?.code === code;
   }
 
   /** Próximo número sequencial cujo código ainda está livre (pula números usados manualmente). */
@@ -87,6 +90,12 @@ export class PlateRepository {
     }
     await this.store.write("plates", plate.id, plate);
     this.byId.set(plate.id, plate);
+    // Remove do índice códigos que esta placa deixou de ter (ex.: código antigo liberado para outra placa).
+    if (previous) {
+      for (const code of [previous.code, ...previous.previousCodes]) {
+        if (this.byCode.get(code)?.id === plate.id) this.byCode.delete(code);
+      }
+    }
     for (const code of [plate.code, ...plate.previousCodes]) this.byCode.set(code, plate);
     this.maxSequence = Math.max(this.maxSequence, plate.sequence);
   }

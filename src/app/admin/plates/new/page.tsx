@@ -1,7 +1,5 @@
-import Link from "next/link";
-
 import { PlateForm } from "@/components/admin/plate-form";
-import { EmptyState, PageHeader, Section } from "@/components/admin/ui-bits";
+import { PageHeader, Section } from "@/components/admin/ui-bits";
 import { idSchema } from "@/lib/validation";
 import { getApp } from "@/server/container";
 
@@ -14,15 +12,9 @@ export default async function NewPlatePage({ searchParams }: PageProps<"/admin/p
 
   return (
     <>
-      <PageHeader title="Nova placa" description="O link recebe um número automático (1, 2, 3…), que pode ser alterado depois." />
+      <PageHeader title="Nova placa" description="Defina o código do link (/r/…) ou deixe o número automático (1, 2, 3…)." />
       <Section title="Dados da placa">
-        {clients.length === 0 ? (
-          <EmptyState>
-            Cadastre um <Link href="/admin/clients/new" className="underline">cliente</Link> antes de criar placas.
-          </EmptyState>
-        ) : (
-          <PlateForm clients={clients} defaultClientId={defaultClientId} nextCode={String(app.plateRepository.nextSequence())} />
-        )}
+        <PlateForm clients={clients} defaultClientId={defaultClientId} nextCode={String(app.plateRepository.nextSequence())} />
       </Section>
     </>
   );

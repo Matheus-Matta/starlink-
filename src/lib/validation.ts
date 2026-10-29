@@ -95,14 +95,16 @@ const serialSchema = optionalText(64).refine(
   "Número de série aceita apenas letras, números e . _ - /",
 );
 
+/** Cliente opcional: vazio/ausente vira `null`. */
+const optionalClientIdSchema = z.preprocess((v) => (v === "" || v === undefined ? null : v), idSchema.nullable());
+
 const plateFields = {
-  clientId: idSchema,
+  clientId: optionalClientIdSchema,
   name: requiredText(120, "o nome da placa"),
   serialNumber: serialSchema,
   type: plateTypeSchema,
 };
 
-export const plateCreateSchema = z.object({ ...plateFields, destinationUrl: destinationUrlSchema.nullish() });
 /** Código da URL pública (/r/<código>): normalizado para minúsculas. */
 export const plateCodeSchema = z.string().transform((value, ctx) => {
   const code = normalizePlateCode(value);
@@ -111,6 +113,13 @@ export const plateCodeSchema = z.string().transform((value, ctx) => {
     return z.NEVER;
   }
   return code;
+});
+
+/** Na criação o código é opcional: vazio usa o próximo número da sequência. */
+export const plateCreateSchema = z.object({
+  ...plateFields,
+  destinationUrl: destinationUrlSchema.nullish(),
+  code: z.preprocess((v) => (v === null || (typeof v === "string" && v.trim() === "") ? undefined : v), plateCodeSchema.optional()),
 });
 
 export const plateUpdateSchema = z.object(plateFields).extend({ version: versionSchema, code: plateCodeSchema });

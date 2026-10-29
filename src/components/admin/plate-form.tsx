@@ -47,7 +47,7 @@ export function PlateForm({
     const base = { clientId, name, serialNumber, type };
     const result = plate
       ? await call<{ plate: Plate }>("PATCH", `/api/admin/plates/${plate.id}`, { ...base, code, version: plate.version })
-      : await call<{ plate: Plate }>("POST", "/api/admin/plates", { ...base, destinationUrl: destinationUrl || null });
+      : await call<{ plate: Plate }>("POST", "/api/admin/plates", { ...base, code: code || null, destinationUrl: destinationUrl || null });
     if (!result.ok) {
       setFields(result.error.fields ?? {});
       setMessage({ error: result.error.message });
@@ -65,33 +65,35 @@ export function PlateForm({
     <form onSubmit={onSubmit} className="grid gap-4" noValidate>
       <FormMessage error={message.error} success={message.success} />
       <div className="grid gap-4 md:grid-cols-2">
-        {plate ? (
-          <FormField
-            id="code"
-            label="Código do link"
-            error={err("code")}
-            required
-            hint={
-              code.trim().toLowerCase() !== plate.code
-                ? `O link antigo /r/${plate.code} continuará funcionando e redirecionando para esta placa.`
-                : PLATE_CODE_RULE
-            }
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-muted-foreground font-mono text-sm">/r/</span>
-              <Input id="code" value={code} onChange={(e) => setCode(e.target.value)} maxLength={PLATE_CODE_MAX_LENGTH} required {...aria("code")} />
-            </div>
-          </FormField>
-        ) : (
-          nextCode && (
-            <div className="bg-muted rounded-md p-3 text-sm md:col-span-2">
-              Link desta placa: <code className="font-mono">/r/{nextCode}</code> (número automático; pode ser alterado depois de criada).
-            </div>
-          )
-        )}
-        <FormField id="clientId" label="Cliente" error={err("clientId")} required>
-          <NativeSelect id="clientId" value={clientId} onChange={(e) => setClientId(e.target.value)} required {...aria("clientId")}>
-            <NativeSelectOption value="">Selecione…</NativeSelectOption>
+        <FormField
+          id="code"
+          label="Código do link"
+          error={err("code")}
+          required={!!plate}
+          hint={
+            plate && code.trim().toLowerCase() !== plate.code
+              ? `O link antigo /r/${plate.code} continuará funcionando até outra placa usar este código.`
+              : plate
+                ? PLATE_CODE_RULE
+                : `Opcional: em branco usa o próximo número (${nextCode ?? "automático"}). ${PLATE_CODE_RULE}`
+          }
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-muted-foreground font-mono text-sm">/r/</span>
+            <Input
+              id="code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder={nextCode}
+              maxLength={PLATE_CODE_MAX_LENGTH}
+              required={!!plate}
+              {...aria("code")}
+            />
+          </div>
+        </FormField>
+        <FormField id="clientId" label="Cliente" error={err("clientId")} hint="Opcional.">
+          <NativeSelect id="clientId" value={clientId} onChange={(e) => setClientId(e.target.value)} {...aria("clientId")}>
+            <NativeSelectOption value="">Sem cliente</NativeSelectOption>
             {clients.map((c) => (
               <NativeSelectOption key={c.id} value={c.id}>
                 {c.name}

@@ -36,6 +36,7 @@ const HISTORY_ACTION: Record<string, string> = {
   "schedule-added": "Agendamento criado",
   "schedule-removed": "Agendamento removido",
   migrated: "Migrada para link numérico",
+  "code-released": "Código antigo liberado para outra placa",
 };
 
 const HISTORY_FIELD: Record<string, string> = {
@@ -63,7 +64,7 @@ export default async function PlatePage({ params }: PageProps<"/admin/plates/[id
 
   const tz = app.config.timeZone;
   const now = new Date();
-  const client = app.clientRepository.get(plate.clientId);
+  const client = plate.clientId ? app.clientRepository.get(plate.clientId) : undefined;
   const clients = app.clients.list().map((c) => ({ id: c.id, name: c.name }));
   if (client && !clients.some((c) => c.id === client.id)) clients.push({ id: client.id, name: `${client.name} (arquivado)` });
   const archived = plate.status === "archived";

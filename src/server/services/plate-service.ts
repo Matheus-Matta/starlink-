@@ -17,6 +17,8 @@ export const MAX_SCHEDULES = 50;
 /** Agendamentos encerrados há mais tempo que isso são removidos na próxima gravação. */
 const EXPIRED_SCHEDULE_RETENTION_MS = 90 * 24 * 3600_000;
 
+type MutationResult = { plate: Plate; history: HistoryEntry[] };
+
 export type PlateListFilters = { q?: string; clientId?: string; includeArchived?: boolean };
 
 export class PlateService {
@@ -33,7 +35,7 @@ export class PlateService {
       .list()
       .filter((p) => filters.includeArchived || p.status === "active")
       .filter((p) => !filters.clientId || p.clientId === filters.clientId)
-      .filter((p) => matchesQuery(q, [p.name, p.serialNumber, p.code, ...p.previousCodes, this.clients.get(p.clientId)?.name]))
+      .filter((p) => matchesQuery(q, [p.name, p.serialNumber, p.code, ...p.previousCodes, p.clientId ? this.clients.get(p.clientId)?.name : null]))
       .sort((a, b) => compareText(a.name, b.name));
   }
 
@@ -43,7 +45,8 @@ export class PlateService {
     return plate;
   }
 
-  private assertActiveClient(clientId: string): void {
+  private assertActiveClient(clientId: string | null): void {
+    if (clientId === null) return;
     const client = this.clients.get(clientId);
     if (!client) throw new AppError("VALIDATION", "Cliente não encontrado.", { clientId: "Cliente não encontrado." });
     if (client.status !== "active") {
@@ -51,15 +54,37 @@ export class PlateService {
     }
   }
 
-  private buildPlate(input: PlateCreateInput, at: string): Plate {
+  /**
+   * Reserva `code` para a placa `plateId` (null = placa nova). Código atual de outra placa é recusado;
+   * código anterior de outra placa é liberado (removido dela) e passa a apontar para a nova dona.
+   */
+  private async claimCode(code: string, plateId: string | null, at: string): Promise<void> {
+    const owner = this.plates.getByCode(code);
+    if (!owner || owner.id === plateId) return;
+    if (owner.code === code) {
+      throw new AppError("VALIDATION", "Este código já está em uso.", { code: "Código já usado por outra placa." });
+    }
+    const history: HistoryEntry = { at, action: "code-released", field: "code", before: code, after: null };
+    await this.plates.save({
+      ...owner,
+      previousCodes: owner.previousCodes.filter((c) => c !== code),
+      history: [...owner.history, history].slice(-MAX_HISTORY_ENTRIES),
+      version: owner.version + 1,
+      updatedAt: at,
+    });
+  }
+
+  private async buildPlate(input: PlateCreateInput, at: string): Promise<Plate> {
     const target: Target = input.destinationUrl ? { kind: "url", url: input.destinationUrl } : { kind: "none" };
-    // Código inicial = próximo número da sequência (1, 2, 3…); pode ser alterado depois.
+    // Código inicial = o informado ou o próximo número da sequência (1, 2, 3…); pode ser alterado depois.
     const sequence = this.plates.nextSequence();
+    const code = input.code ?? String(sequence);
+    await this.claimCode(code, null, at);
     return {
       id: randomUUID(),
       version: 1,
       sequence,
-      code: String(sequence),
+      code,
       previousCodes: [],
       clientId: input.clientId,
       name: input.name,
@@ -68,7 +93,7 @@ export class PlateService {
       status: "active",
       routing: { active: true, target, page: { title: input.name, description: null, buttons: [] } },
       schedules: [],
-      history: [{ at, action: "created", field: "plate", before: null, after: `/r/${sequence} → ${describeTarget(target)}` }],
+      history: [{ at, action: "created", field: "plate", before: null, after: `/r/${code} → ${describeTarget(target)}` }],
       createdAt: at,
       updatedAt: at,
     };
@@ -77,7 +102,7 @@ export class PlateService {
   create(input: PlateCreateInput): Promise<Plate> {
     return this.mutex.run(async () => {
       this.assertActiveClient(input.clientId);
-      const plate = this.buildPlate(input, this.now().toISOString());
+      const plate = await this.buildPlate(input, this.now().toISOString());
       await this.plates.save(plate);
       return plate;
     });
@@ -89,7 +114,7 @@ export class PlateService {
       for (const input of inputs) this.assertActiveClient(input.clientId);
       const created: Plate[] = [];
       for (const input of inputs) {
-        const plate = this.buildPlate(input, this.now().toISOString());
+        const plate = await this.buildPlate(input, this.now().toISOString());
         await this.plates.save(plate);
         created.push(plate);
       }
@@ -101,7 +126,7 @@ export class PlateService {
   private mutate(
     id: string,
     version: number,
-    change: (plate: Plate, at: string) => { plate: Plate; history: HistoryEntry[] },
+    change: (plate: Plate, at: string) => MutationResult | Promise<MutationResult>,
     authorize?: (plate: Plate) => void,
   ) {
     return this.mutex.run(async () => {
@@ -109,7 +134,7 @@ export class PlateService {
       authorize?.(current);
       if (current.version !== version) throw staleVersion();
       const at = this.now().toISOString();
-      const { plate, history } = change(current, at);
+      const { plate, history } = await change(current, at);
       const cutoff = Date.parse(at) - EXPIRED_SCHEDULE_RETENTION_MS;
       const next: Plate = {
         ...plate,
@@ -125,7 +150,7 @@ export class PlateService {
 
   update(id: string, input: PlateUpdateInput): Promise<Plate> {
     const { version, ...fields } = input;
-    return this.mutate(id, version, (current, at) => {
+    return this.mutate(id, version, async (current, at) => {
       if (fields.clientId !== current.clientId) this.assertActiveClient(fields.clientId);
       const history: HistoryEntry[] = [];
       const track = (field: string, before: string | null, after: string | null) => {
@@ -138,10 +163,9 @@ export class PlateService {
 
       let previousCodes = current.previousCodes;
       if (fields.code !== current.code) {
-        if (this.plates.isCodeTaken(fields.code) && !current.previousCodes.includes(fields.code)) {
-          throw new AppError("VALIDATION", "Este código já está em uso.", { code: "Código já usado por outra placa (atual ou anterior)." });
-        }
-        // O código antigo continua redirecionando para esta placa (placas já impressas/gravadas não quebram).
+        await this.claimCode(fields.code, current.id, at);
+        // O código antigo continua redirecionando para esta placa (placas já impressas/gravadas não quebram)
+        // até outra placa passar a usá-lo.
         previousCodes = [...current.previousCodes.filter((c) => c !== fields.code), current.code];
         track("code", current.code, fields.code);
       }

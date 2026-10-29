@@ -86,9 +86,13 @@ export type Plate = {
   sequence: number;
   /** Código atual da URL pública (/r/<código>). Começa como o número sequencial e pode ser alterado. */
   code: string;
-  /** Códigos anteriores: continuam redirecionando para esta placa e nunca são usados por outra. */
+  /**
+   * Códigos anteriores: continuam redirecionando para esta placa até serem usados por outra
+   * (nesse caso o código é removido daqui e passa a apontar para a nova placa).
+   */
   previousCodes: string[];
-  clientId: string;
+  /** Cliente dono da placa (opcional). */
+  clientId: string | null;
   name: string;
   serialNumber: string | null;
   type: PlateType;

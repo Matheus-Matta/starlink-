@@ -15,7 +15,7 @@ export default function ImportPage() {
         <Section title="Formato">
           <ul className="text-muted-foreground list-inside list-disc space-y-1 text-sm">
             <li>
-              <strong className="text-foreground">cliente</strong> (obrigatório): ID do cliente ou CPF/CNPJ cadastrado.
+              <strong className="text-foreground">cliente</strong> (opcional): ID do cliente ou CPF/CNPJ cadastrado.
             </li>
             <li>
               <strong className="text-foreground">nome</strong> (obrigatório): nome da placa.
